@@ -1,0 +1,55 @@
+# CMS Vs G1
+
+By Kirk
+Use G1 when you have tons of memory and don’t care about burning CPU… ;-)
+
+More seriously, Oracle’s perspective on when to use the G1 is a bit skewed as they believe it is 
+ready to be the default collector. Unfortunately, they thought the same for tiered compilation and 
+they were wrong but there was no plans for rolling back on that decision. There is a hint that they 
+will roll of the G1 should it prove to causes problems. We’ll see. IMHO, CMS is the most stable collector 
+that can still offer short pause times of all the OpenJDK collectors (C4 from Azul aside). I would stick
+with it if it doesn’t interfere with your applications throughput. It will require some tuning but 
+in many cases it’s just a matter of getting the internal pool sizes correct. This is where Censum and 
+some tuning guidelines can help you. Aim for a young frequency that is at most 1 every 2 seconds. 
+Make sure tenured is large enough to manage through fragmentation without causing a CMF. Generally 
+tenured should be 2x to 3x larger than the live set in tenured. Censum will give you GC frequencies 
+in the summary table and there is a chart that shows you the live set size in tenured. It’s rare that 
+you have to tune things such as IOF. Generally you only want to do that to increase the frequency of 
+CMS cycles. The amount of work performed in (cost of) a CMS cycle ~= number of live objects in tenured + time 
+to process dead stuff and adjust the free lists. So, if you assume a stable live set in tenured, the cost is 
+a mix of a “fixed” and variable component, the downside of frequent CMS cycles is the effect of the cumulative
+fixed costs on application throughput. Sometimes it’s a win and sometimes its a loss.
+
+I’ve some idea on tuning guides for the G1 but I’m not quite ready to share them as I’ve not tested them yet.
+One thing I can say about the G1, CPU burn ~= live set size in tenured so….
+
+
+By Martijn
+General statement:  So our recommendation is always to firstly understand what GC goals you want.
+
+1.) Application Throughput - How much % time are you willing to hand over to GC activity? 
+We typically recommend that Application throughput should be 95%+, correspondingly GC throughput 
+should be <5%. Censum has graphs and an analytic to report on this.
+
+2.) Pause time - What individual pauses are you willing to put up with?  For example, "2 ~3 
+second pauses a day with the rest < 100ms"
+
+3.) Footprint (Heapsize) - How much Heap can you allocate/afford?  Memory isn't always cheap 
+on virtualised envs...
+
+G1 vs CMS - when to try:
+
+With the general statement in mind, G1 is designed to be a low configuration, low pause collector 
+for large heaps. You do sacrifice some application throughput and of course some heap space in order 
+to meet those low pause time goals. A major design goal is that hopefully you can do this with almost
+zero configuration.
+
+CMS was also designed to be a fairly low pause collector for small --> large(r) heaps, but arguably 
+it wasn't designed up front for the larger heaps we see today in the wild. It's seen by many to require
+much more configuration than G1 (or any other collector) and has some nasty 'blow out' failure cases 
+(well OK, G1 has those also :-)).
+
+So, when to use G1?  When configuring CMS gets too hard and/or your heaps are large (2-4GB+) and/or you want
+to be able to explicitly set pause time goals.
+
+Please only use G1 on 1.8.0_40+ and the usual caveats apply that your application and JVM may vary!
